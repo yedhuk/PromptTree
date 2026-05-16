@@ -79,6 +79,9 @@ _DEFAULTS: dict[str, object] = {
     "form_parent_id": None,   # None = new root prompt
     "form_parent_name": "",   # inherited name when branching
     "form_content": "",       # prompt text shared between inline box and dialog
+    "form_parent_content": "",  # original parent content — used to block unchanged saves
+    "form_parent_model": "",    # parent model pre-selection
+    "form_parent_temp": 0.7,    # parent temperature pre-selection
 }
 for k, v in _DEFAULTS.items():
     if k not in st.session_state:
@@ -328,18 +331,30 @@ with col_detail:
             label_in = st.text_input("Label (optional)", placeholder="prod, dev…")
         with c2:
             _CUSTOM = "Custom…"
-            model_choice = st.selectbox("Model", MODELS + [_CUSTOM])
+            _parent_model = str(st.session_state.form_parent_model)
+            _model_options = MODELS + [_CUSTOM]
+            if _parent_model and _parent_model not in MODELS:
+                _model_options = [_parent_model] + MODELS + [_CUSTOM]
+            _default_model_idx = (
+                _model_options.index(_parent_model)
+                if _parent_model in _model_options else 0
+            )
+            model_choice = st.selectbox("Model", _model_options, index=_default_model_idx)
             if model_choice == _CUSTOM:
                 model_in = st.text_input("Custom model", placeholder="e.g. mistral/mistral-7b")
             else:
                 model_in = model_choice
 
-        temp_in = st.slider("Temperature", 0.0, 1.0, 0.7, step=0.05)
+        _default_temp = float(st.session_state.form_parent_temp)  # type: ignore[arg-type]
+        temp_in = st.slider("Temperature", 0.0, 1.0, _default_temp, step=0.05)
 
         st.markdown("")
         btn_col, cancel_col = st.columns(2)
         with btn_col:
-            can_save = bool(content.strip() and form_name.strip())
+            _unchanged = is_branch and content.strip() == str(
+                st.session_state.form_parent_content
+            ).strip()
+            can_save = bool(content.strip() and form_name.strip() and not _unchanged)
             if st.button("Save", type="primary", use_container_width=True, disabled=not can_save):
                 saved = engine.save(
                     content=content.strip(),
@@ -353,11 +368,17 @@ with col_detail:
                 st.session_state.selected_id = saved.id
                 st.session_state.show_form = False
                 st.session_state.form_content = ""
+                st.session_state.form_parent_content = ""
+                st.session_state.form_parent_model = ""
+                st.session_state.form_parent_temp = 0.7
                 st.rerun()
         with cancel_col:
             if st.button("Cancel", use_container_width=True):
                 st.session_state.show_form = False
                 st.session_state.form_content = ""
+                st.session_state.form_parent_content = ""
+                st.session_state.form_parent_model = ""
+                st.session_state.form_parent_temp = 0.7
                 st.rerun()
 
     # ── Node detail ───────────────────────────────────────────────────────────
@@ -419,6 +440,10 @@ with col_detail:
             st.session_state.show_form = True
             st.session_state.form_parent_id = node.id
             st.session_state.form_parent_name = node.name
+            st.session_state.form_content = node.content
+            st.session_state.form_parent_content = node.content
+            st.session_state.form_parent_model = node.metadata.model
+            st.session_state.form_parent_temp = node.metadata.temperature
             st.rerun()
 
     # ── Empty detail pane ─────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/yedhuk/prompttree/main/prompttree/ui/assets/PromptTree_Transparent.png" alt="PromptTree" height="72">
+  <img src="https://raw.githubusercontent.com/yedhuk/prompttree/main/prompttree/ui/assets/PromptTree_Transparent.png" alt="PromptTree" height="200">
 </p>
 
 # PromptTree
