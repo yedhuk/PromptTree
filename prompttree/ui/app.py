@@ -345,7 +345,7 @@ with col_detail:
             else:
                 model_in = model_choice
 
-        _default_temp = float(st.session_state.form_parent_temp)  # type: ignore[arg-type]
+        _default_temp = float(st.session_state.form_parent_temp)
         temp_in = st.slider("Temperature", 0.0, 1.0, _default_temp, step=0.05)
 
         st.markdown("")

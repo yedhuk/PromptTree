@@ -1,4 +1,4 @@
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 from .core.engine import PromptTree
 from .models.node import NodeMetadata, RegistryNode
