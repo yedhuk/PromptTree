@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/yedhuk/prompttree/main/prompttree/ui/assets/PromptTree_Transparent.png" alt="PromptTree" height="72">
+
 # PromptTree
 
 **Git-native prompt engineering library.** Version and manage your LLM prompts like code — with a branching registry, Jinja2 templating, AES-256 encryption, and a visual UI.
