@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prompttree"
+version = "1.0.2"
+description = "Git-native prompt engineering library with Registry/Lab dual-state model"
+authors = [
+    { name = "Yedhu Krishna", email = "yedhukrishnaykp@gmail.com" }
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "litellm>=1.30",
+    "cryptography>=42.0",
+    "click>=8.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/yedhuk/prompttree"
+Repository = "https://github.com/yedhuk/prompttree"
+
+[project.optional-dependencies]
+ui = [
+    "streamlit>=1.35",
+    "streamlit-agraph>=0.0.45",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "types-PyYAML",
+]
+
+[project.scripts]
+prompttree = "prompttree.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["prompttree*"]
+
+[tool.setuptools.package-data]
+"prompttree.ui" = ["assets/PromptTree_Transparent.png"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--ignore=tests/test_artifacts.py --ignore=tests/test_lab.py"

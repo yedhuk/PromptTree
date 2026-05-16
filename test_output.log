@@ -1,0 +1,43 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.8, pytest-9.0.3, pluggy-1.6.0 -- /home/yedhu/workspace/ai-ml/projects/PromptTree/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/yedhu/workspace/ai-ml/projects/PromptTree
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.13.0, cov-7.1.0
+collecting ... collected 32 items
+
+tests/test_artifacts.py::test_save_and_list PASSED                       [  3%]
+tests/test_artifacts.py::test_save_without_metadata PASSED               [  6%]
+tests/test_artifacts.py::test_list_missing_owner PASSED                  [  9%]
+tests/test_artifacts.py::test_relink PASSED                              [ 12%]
+tests/test_crypto.py::test_roundtrip PASSED                              [ 15%]
+tests/test_crypto.py::test_wrong_key_raises PASSED                       [ 18%]
+tests/test_crypto.py::test_different_nonces PASSED                       [ 21%]
+tests/test_engine.py::test_save_and_get_prompt PASSED                    [ 25%]
+tests/test_engine.py::test_get_prompt_by_id PASSED                       [ 28%]
+tests/test_engine.py::test_get_prompt_missing_raises PASSED              [ 31%]
+tests/test_engine.py::test_lock_unlock PASSED                            [ 34%]
+tests/test_engine.py::test_promote PASSED                                [ 37%]
+tests/test_engine.py::test_list_nodes PASSED                             [ 40%]
+tests/test_engine.py::test_get_labels PASSED                             [ 43%]
+tests/test_lab.py::test_run_success PASSED                               [ 46%]
+tests/test_lab.py::test_run_error_captured PASSED                        [ 50%]
+tests/test_lab.py::test_history_persistence PASSED                       [ 53%]
+tests/test_lab.py::test_get_by_id PASSED                                 [ 56%]
+tests/test_lab.py::test_get_missing_returns_none PASSED                  [ 59%]
+tests/test_lab.py::test_save_artifact_requires_run PASSED                [ 62%]
+tests/test_lab.py::test_save_artifact_after_run PASSED                   [ 65%]
+tests/test_lab.py::test_context_manager PASSED                           [ 68%]
+tests/test_registry.py::test_save_and_get PASSED                         [ 71%]
+tests/test_registry.py::test_get_missing_returns_none PASSED             [ 75%]
+tests/test_registry.py::test_labels PASSED                               [ 78%]
+tests/test_registry.py::test_label_missing_returns_none PASSED           [ 81%]
+tests/test_registry.py::test_remove_label PASSED                         [ 84%]
+tests/test_registry.py::test_children PASSED                             [ 87%]
+tests/test_registry.py::test_lock_unlock PASSED                          [ 90%]
+tests/test_registry.py::test_lock_count PASSED                           [ 93%]
+tests/test_registry.py::test_persistence PASSED                          [ 96%]
+tests/test_registry.py::test_delete PASSED                               [100%]
+
+============================== 32 passed in 0.19s ==============================
