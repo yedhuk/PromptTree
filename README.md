@@ -72,11 +72,11 @@ Opens at `http://localhost:8501`.
 
 
 <p>
-  <img src="https://raw.githubusercontent.com/yedhuk/prompttree/main/prompttree/docs/images/new_prompt_new_branch.png" alt="New Prompt/Branch">
+  <img src="https://raw.githubusercontent.com/yedhuk/prompttree/main/docs/images/new_prompt_new_branch.png" alt="New Prompt/Branch">
 </p>
 
 <p>
-  <img src="https://raw.githubusercontent.com/yedhuk/prompttree/main/prompttree/docs/images/prompt_iteration.png" alt="Prompt Iteration">
+  <img src="https://raw.githubusercontent.com/yedhuk/prompttree/main/docs/images/prompt_iteration.png" alt="Prompt Iteration">
 </p>
 
 ---
