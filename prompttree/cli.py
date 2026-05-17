@@ -8,6 +8,7 @@ from .core.engine import PromptTree
 
 
 @click.group()
+@click.version_option(package_name="prompttree")
 def cli() -> None:
     """PromptTree — Git-native prompt engineering toolkit."""
 
@@ -81,6 +82,36 @@ def ui(storage: str, port: int) -> None:
     )
 
 
+@cli.command("delete-family")
+@click.argument("name")
+@click.option("--storage", default=".prompttree", show_default=True)
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
+def delete_family(name: str, storage: str, yes: bool) -> None:
+    """Delete all nodes in a prompt family NAME and its labels."""
+    if not yes:
+        click.confirm(f"Delete all nodes for '{name}'? This cannot be undone.", abort=True)
+    pt = PromptTree(storage=storage)
+    count = pt.delete_family(name)
+    if count == 0:
+        click.echo(f"No nodes found for '{name}'.")
+    else:
+        click.echo(f"Deleted {count} node(s) for '{name}'.")
+
+
+@cli.command()
+@click.option("--storage", default=".prompttree", show_default=True)
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
+def reset(storage: str, yes: bool) -> None:
+    """Wipe the entire registry and start fresh."""
+    if not yes:
+        click.confirm(
+            "This will permanently delete ALL nodes and labels. Continue?", abort=True
+        )
+    pt = PromptTree(storage=storage)
+    count = pt.reset()
+    click.echo(f"Registry reset. {count} node(s) deleted.")
+
+
 @cli.command("list")
 @click.option("--storage", default=".prompttree", show_default=True)
 def list_nodes(storage: str) -> None:
@@ -88,8 +119,9 @@ def list_nodes(storage: str) -> None:
     pt = PromptTree(storage=storage)
     labels = pt.get_labels()
     reversed_labels: dict[str, list[str]] = {}
-    for label, node_id in labels.items():
-        reversed_labels.setdefault(node_id, []).append(label)
+    for _name, name_labels in labels.items():
+        for label, node_id in name_labels.items():
+            reversed_labels.setdefault(node_id, []).append(label)
 
     nodes = pt.list_nodes()
     if not nodes:
@@ -100,8 +132,9 @@ def list_nodes(storage: str) -> None:
         node_labels = reversed_labels.get(node.id, [])
         label_str = f"  [{', '.join(node_labels)}]" if node_labels else ""
         encrypted_str = " (encrypted)" if node.metadata.encrypted else ""
+        name_str = f"  {node.name}" if node.name else ""
         line = (
-            f"{node.id[:12]}  {node.metadata.model}"
+            f"{node.id[:12]}{name_str}  {node.metadata.model}"
             f"  {node.metadata.created_at:%Y-%m-%d}{label_str}{encrypted_str}"
         )
         click.echo(line)

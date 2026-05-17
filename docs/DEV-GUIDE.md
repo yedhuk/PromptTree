@@ -202,9 +202,10 @@ password: pypi-xxxxxxxxxxxx
 ### 10. Tag the release
 
 ```bash
-git tag v1.0.0
+git tag -a v1.0.0 -m "Version 1.0.0"
 git push origin v1.0.0
 ```
+Tag after commit.
 
 ### 11. Verify on PyPI
 

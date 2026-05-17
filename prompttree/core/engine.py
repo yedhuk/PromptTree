@@ -35,18 +35,31 @@ class PromptTree:
 
     def get_prompt(
         self,
-        label_or_id: str,
+        name_or_id: str,
+        label: Optional[str] = None,
+        by: Optional[str] = None,
         vars: Optional[dict[str, Any]] = None,
     ) -> str:
-        """Resolve a label or node ID to a rendered prompt string.
+        """Resolve a prompt to a rendered string.
 
-        Decrypts content in-memory if the engine was initialised with a key.
+        - ``by="id"``: treat ``name_or_id`` as a node ID directly.
+        - ``label=...``: look up the named label scoped to the prompt family.
+        - neither: return the most recently created node in the family.
         """
         from jinja2 import Template
 
-        node = self._registry.get_by_label(label_or_id) or self._registry.get(label_or_id)
-        if node is None:
-            raise KeyError(f"No node found for label/id '{label_or_id}'")
+        if by == "id":
+            node = self._registry.get(name_or_id)
+            if node is None:
+                raise KeyError(f"No node found for id '{name_or_id}'")
+        elif label is not None:
+            node = self._registry.get_by_label(name_or_id, label)
+            if node is None:
+                raise KeyError(f"No node found for name='{name_or_id}' label='{label}'")
+        else:
+            node = self._registry.get_latest_by_name(name_or_id)
+            if node is None:
+                raise KeyError(f"No prompt family found with name '{name_or_id}'")
 
         content = node.content
         if node.metadata.encrypted:
@@ -84,7 +97,7 @@ class PromptTree:
         )
         self._registry.save(node)
         if label:
-            self._registry.set_label(label, node.id)
+            self._registry.set_label(node.name, label, node.id)
         return node
 
     def list_names(self) -> list[str]:
@@ -95,8 +108,8 @@ class PromptTree:
         """Return all nodes belonging to a prompt family."""
         return [n for n in self._registry.all_nodes() if n.name == name]
 
-    def set_label(self, label: str, node_id: str) -> None:
-        self._registry.set_label(label, node_id)
+    def set_label(self, name: str, label: str, node_id: str) -> None:
+        self._registry.set_label(name, label, node_id)
 
     def get_node(self, node_id: str) -> Optional[RegistryNode]:
         return self._registry.get(node_id)
@@ -104,7 +117,7 @@ class PromptTree:
     def list_nodes(self) -> list[RegistryNode]:
         return self._registry.all_nodes()
 
-    def get_labels(self) -> dict[str, str]:
+    def get_labels(self) -> dict[str, dict[str, str]]:
         return self._registry.get_labels()
 
     # ------------------------------------------------------------------
@@ -120,20 +133,25 @@ class PromptTree:
         lab_id: str,
         parent_id: Optional[str] = None,
         label: Optional[str] = None,
+        name: str = "",
         model: Optional[str] = None,
         temperature: Optional[float] = None,
     ) -> RegistryNode:
         """Promote a Lab experiment to the Registry.
 
         Copies the prompt to a new Registry node, relinks artifacts, and
-        optionally assigns a label.
+        optionally assigns a label. ``name`` is required when ``label`` is set.
         """
         exp = self._lab.get(lab_id)
         if exp is None:
             raise KeyError(f"Lab experiment '{lab_id}' not found.")
 
+        if label and not name:
+            raise ValueError("'name' is required when assigning a label via promote()")
+
         node = RegistryNode(
             parent_id=parent_id,
+            name=name,
             content=exp.prompt_text,
             metadata=NodeMetadata(
                 model=model or exp.model,
@@ -143,10 +161,18 @@ class PromptTree:
         self._registry.save(node)
 
         if label:
-            self._registry.set_label(label, node.id)
+            self._registry.set_label(name, label, node.id)
 
         self._artifacts.relink(lab_id, node.id)
         return node
+
+    def delete_family(self, name: str) -> int:
+        """Delete all nodes in a prompt family and their labels. Returns count deleted."""
+        return self._registry.delete_family(name)
+
+    def reset(self) -> int:
+        """Wipe the entire registry. Returns count of nodes deleted."""
+        return self._registry.reset()
 
     # ------------------------------------------------------------------
     # Encryption helpers (also exposed via CLI)

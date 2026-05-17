@@ -22,24 +22,24 @@ def test_get_missing_returns_none(registry):
 
 
 def test_labels(registry):
-    node = RegistryNode(content="prod prompt")
+    node = RegistryNode(content="prod prompt", name="my-prompt")
     registry.save(node)
-    registry.set_label("prod", node.id)
-    found = registry.get_by_label("prod")
+    registry.set_label("my-prompt", "prod", node.id)
+    found = registry.get_by_label("my-prompt", "prod")
     assert found is not None
     assert found.id == node.id
 
 
 def test_label_missing_returns_none(registry):
-    assert registry.get_by_label("missing") is None
+    assert registry.get_by_label("missing", "prod") is None
 
 
 def test_remove_label(registry):
-    node = RegistryNode(content="x")
+    node = RegistryNode(content="x", name="my-prompt")
     registry.save(node)
-    registry.set_label("alpha", node.id)
-    registry.remove_label("alpha")
-    assert registry.get_by_label("alpha") is None
+    registry.set_label("my-prompt", "alpha", node.id)
+    registry.remove_label("my-prompt", "alpha")
+    assert registry.get_by_label("my-prompt", "alpha") is None
 
 
 def test_children(registry):
@@ -76,13 +76,13 @@ def test_lock_count(registry):
 
 def test_persistence(tmp_path):
     r1 = Registry(tmp_path)
-    node = RegistryNode(content="persisted")
+    node = RegistryNode(content="persisted", name="my-prompt")
     r1.save(node)
-    r1.set_label("prod", node.id)
+    r1.set_label("my-prompt", "prod", node.id)
 
     r2 = Registry(tmp_path)
     assert r2.get(node.id) is not None
-    assert r2.get_by_label("prod").id == node.id
+    assert r2.get_by_label("my-prompt", "prod").id == node.id
 
 
 def test_delete(registry):
@@ -90,3 +90,37 @@ def test_delete(registry):
     registry.save(node)
     registry.delete(node.id)
     assert registry.get(node.id) is None
+
+
+def test_delete_family(registry):
+    n1 = RegistryNode(content="v1", name="my-prompt")
+    n2 = RegistryNode(content="v2", name="my-prompt")
+    other = RegistryNode(content="other", name="other-prompt")
+    registry.save(n1)
+    registry.save(n2)
+    registry.save(other)
+    registry.set_label("my-prompt", "prod", n2.id)
+
+    count = registry.delete_family("my-prompt")
+
+    assert count == 2
+    assert registry.get(n1.id) is None
+    assert registry.get(n2.id) is None
+    assert registry.get(other.id) is not None
+    assert "my-prompt" not in registry.get_labels()
+
+
+def test_delete_family_nonexistent(registry):
+    assert registry.delete_family("ghost") == 0
+
+
+def test_reset(registry):
+    registry.save(RegistryNode(content="a", name="family-a"))
+    registry.save(RegistryNode(content="b", name="family-b"))
+    registry.set_label("family-a", "prod", registry.all_nodes()[0].id)
+
+    count = registry.reset()
+
+    assert count == 2
+    assert registry.all_nodes() == []
+    assert registry.get_labels() == {}

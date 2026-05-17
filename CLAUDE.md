@@ -43,6 +43,10 @@ prompttree init                        # initialise .prompttree workspace
 prompttree lock --key $PT_KEY          # encrypt registry (run in CI)
 prompttree unlock --key $PT_KEY        # decrypt registry
 prompttree list                        # list all nodes + labels
+prompttree delete-family <NAME>        # delete all nodes + labels for a prompt family
+prompttree delete-family <NAME> --yes  # skip confirmation
+prompttree reset                       # wipe entire registry
+prompttree reset --yes                 # skip confirmation
 prompttree ui                          # launch Streamlit UI (port 8501)
 prompttree ui --port 8080              # launch on custom port
 ```
@@ -54,7 +58,7 @@ The core design separates data by lifecycle stage:
 ### Registry (Git-Tracked) — v1.0
 - Lives in `.prompttree/registry/`
 - `nodes/` — one UUID-named `.yaml` file per prompt node
-- `labels.json` — alias map (`{"prod": "node_hex_id"}`)
+- `labels.json` — name-scoped alias map (`{"family-name": {"prod": "node_hex_id"}}`)
 - Nodes form a DAG via the `parent_id` field in each YAML
 - On startup `Registry` scans `nodes/` and builds an in-memory `dict[id, RegistryNode]`
 
@@ -70,11 +74,16 @@ The core design separates data by lifecycle stage:
 
 ## Key Data Flows
 
-**Production path:** `engine.get_prompt(label_or_id, vars)` → resolves label via `labels.json` → loads node from in-memory dict → decrypts if `key` was provided → Jinja2-renders with vars → returns string.
+**Production path:** `engine.get_prompt(name, label=..., by=..., vars=...)` resolves the node via one of three modes (see below) → decrypts if `key` was provided → Jinja2-renders with vars → returns string.
+
+**Prompt resolution modes:**
+- `get_prompt("My Prompt", label="prod")` — resolves the `prod` label scoped to that family
+- `get_prompt("My Prompt")` — returns the most recently created node in the family (`created_at` descending)
+- `get_prompt(node_id, by="id")` — resolves the exact node by ID
 
 **Experiment path (v1.1):** `engine.lab_session()` → `lab.run(prompt_text, model, images, vars)` → Jinja2-renders → LiteLLM call → appends `LabExperiment` to `experiments.jsonl` → returns experiment object.
 
-**Promotion path (v1.1):** `engine.promote(lab_id, parent_id, label)` → reads experiment from JSONL → creates `RegistryNode` → `registry.save()` → `artifacts.relink(lab_id, node.id)` → optionally sets label.
+**Promotion path (v1.1):** `engine.promote(lab_id, name, parent_id, label)` → reads experiment from JSONL → creates `RegistryNode` → `registry.save()` → `artifacts.relink(lab_id, node.id)` → optionally sets label (requires `name` when `label` is set).
 
 **Lock/Unlock (CI):** `prompttree lock --key $PT_KEY` walks all nodes, AES-256-GCM encrypts `content` in-place, sets `metadata.encrypted = true`. Decryption happens in-memory inside `get_prompt` when `PromptTree(key=...)` is set.
 
@@ -96,7 +105,7 @@ prompttree/
 ├── ui/
 │   ├── app.py         # Streamlit UI — DAG explorer, node detail, create/branch form
 │   └── assets/        # Logo and static assets
-└── cli.py             # Click CLI: init, lock, unlock, list, ui
+└── cli.py             # Click CLI: init, lock, unlock, list, delete-family, reset, ui
 ```
 
 ## Public API Surface (v1.0)
@@ -107,6 +116,30 @@ __all__ = ["PromptTree", "RegistryNode", "NodeMetadata"]
 ```
 
 `LabExperiment`, `LabSession`, `ArtifactStore` are **not exported** — they exist in code but are hidden until v1.1.
+
+### `PromptTree` public methods (v1.0)
+
+```python
+# Save & retrieve
+save(content, name, display_name, model, temperature, parent_id, tags, label) → RegistryNode
+get_prompt(name_or_id, label=None, by=None, vars=None) → str
+get_node(node_id) → RegistryNode | None
+list_nodes() → list[RegistryNode]
+list_names() → list[str]
+get_nodes_by_name(name) → list[RegistryNode]
+
+# Labels  (schema: {name: {label: node_id}})
+get_labels() → dict[str, dict[str, str]]
+set_label(name, label, node_id)
+
+# Bulk operations
+delete_family(name) → int   # deletes all nodes where node.name == name + labels entry
+reset() → int               # wipes all nodes and resets labels.json to {}
+
+# Encryption
+lock(key) → int
+unlock(key) → int
+```
 
 ## Node YAML Schema
 
@@ -138,7 +171,7 @@ content: "Analyze this P&ID for {{drawing}}..."
 
 ## Tests
 
-- `test_crypto.py`, `test_engine.py`, `test_registry.py` — active (20 tests)
+- `test_crypto.py`, `test_engine.py`, `test_registry.py` — active (30 tests)
 - `test_lab.py`, `test_artifacts.py` — excluded via `addopts` in `pyproject.toml` (v1.1)
 - All tests use `tmp_path` fixture — no real `.prompttree/` is touched
 

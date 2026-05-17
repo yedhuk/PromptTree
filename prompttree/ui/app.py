@@ -131,11 +131,19 @@ def _compute_positions(
     return positions
 
 
+def _build_reverse_labels() -> dict[str, str]:
+    result: dict[str, list[str]] = {}
+    for _name, name_labels in engine.get_labels().items():
+        for label, node_id in name_labels.items():
+            result.setdefault(node_id, []).append(label)
+    return {node_id: ", ".join(lbls) for node_id, lbls in result.items()}
+
+
 def _build_graph(
     nodes: list[RegistryNode],
     selected_id: str | None,
 ) -> tuple[list[Node], list[Edge]]:
-    rlabels = {v: k for k, v in engine.get_labels().items()}
+    rlabels = _build_reverse_labels()
     positions = _compute_positions(nodes)
     node_map = {n.id: n for n in nodes}
 
@@ -390,7 +398,7 @@ with col_detail:
             st.rerun()
 
         assert node is not None
-        rlabels = {v: k for k, v in engine.get_labels().items()}
+        rlabels = _build_reverse_labels()
         label = rlabels.get(node.id)
         heading = node.display_name or label or node.id[:14] + "…"
 

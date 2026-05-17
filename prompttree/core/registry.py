@@ -60,30 +60,62 @@ class Registry:
         return [n for n in self._nodes.values() if n.parent_id == node_id]
 
     # ------------------------------------------------------------------
-    # Labels
+    # Labels  (schema: {name: {label: node_id}})
     # ------------------------------------------------------------------
 
-    def get_by_label(self, label: str) -> Optional[RegistryNode]:
+    def get_by_label(self, name: str, label: str) -> Optional[RegistryNode]:
         labels = self._read_labels()
-        node_id = labels.get(label)
+        node_id = labels.get(name, {}).get(label)
         return self._nodes.get(node_id) if node_id else None
 
-    def set_label(self, label: str, node_id: str) -> None:
+    def set_label(self, name: str, label: str, node_id: str) -> None:
         labels = self._read_labels()
-        labels[label] = node_id
+        labels.setdefault(name, {})[label] = node_id
         self._labels_file.write_text(json.dumps(labels, indent=2))
 
-    def remove_label(self, label: str) -> None:
+    def remove_label(self, name: str, label: str) -> None:
         labels = self._read_labels()
-        labels.pop(label, None)
+        if name in labels:
+            labels[name].pop(label, None)
+            if not labels[name]:
+                del labels[name]
         self._labels_file.write_text(json.dumps(labels, indent=2))
 
-    def get_labels(self) -> dict[str, str]:
+    def get_labels(self) -> dict[str, dict[str, str]]:
         return self._read_labels()
 
-    def _read_labels(self) -> dict[str, str]:
-        result: dict[str, str] = json.loads(self._labels_file.read_text())
+    def get_latest_by_name(self, name: str) -> Optional[RegistryNode]:
+        family = [n for n in self._nodes.values() if n.name == name]
+        if not family:
+            return None
+        return max(family, key=lambda n: n.metadata.created_at)
+
+    def _read_labels(self) -> dict[str, dict[str, str]]:
+        result: dict[str, dict[str, str]] = json.loads(self._labels_file.read_text())
         return result
+
+    # ------------------------------------------------------------------
+    # Family / registry-level operations
+    # ------------------------------------------------------------------
+
+    def delete_family(self, name: str) -> int:
+        """Delete all nodes belonging to a prompt family and their labels. Returns count deleted."""
+        to_delete = [n for n in self._nodes.values() if n.name == name]
+        for node in to_delete:
+            self.delete(node.id)
+        labels = self._read_labels()
+        if name in labels:
+            del labels[name]
+            self._labels_file.write_text(json.dumps(labels, indent=2))
+        return len(to_delete)
+
+    def reset(self) -> int:
+        """Wipe all nodes and labels. Returns count of nodes deleted."""
+        count = len(self._nodes)
+        for node_id in list(self._nodes.keys()):
+            self.delete(node_id)
+        self._labels_file.write_text("{}")
+        return count
 
     # ------------------------------------------------------------------
     # Bulk encrypt / decrypt (called by CLI `lock` / `unlock`)
