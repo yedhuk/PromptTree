@@ -8,6 +8,171 @@
 
 ---
 
+## Why PromptTree
+
+Prompts are code. They have bugs, regressions, and versions — but most teams manage them as loose strings scattered across notebooks, env files, or database rows. PromptTree brings prompts into your git workflow and makes them first-class artifacts you can review, audit, roll back, and deploy with confidence.
+
+---
+
+### The UI is the primary authoring surface
+
+When iterating on prompts, use `prompttree ui` rather than calling `engine.save()` directly. The visual DAG shows you the full lineage of a prompt family — which versions branched from which, which node carries the `prod` label, and what the content of every ancestor looks like — before you write a single character of a new version.
+
+```bash
+prompttree ui   # opens http://localhost:8501
+```
+
+- **See the tree before you branch.** Branching from the wrong parent is the most common prompt-versioning mistake. The DAG makes parent selection unambiguous.
+- **Edit in context.** The node detail panel shows parent content alongside the editor, so you can see exactly what you are changing relative to the previous version.
+- **Assign labels without code.** Promote a node to `prod` or `staging` from the UI — the `labels.json` change is written to disk and ready to commit.
+- **Rapid iteration.** Writers, product managers, and domain experts who don't write Python can own the prompt content while engineers own the application code that consumes it.
+
+The `engine.save()` API is still useful for scripted or programmatic ingestion (bulk imports, automated prompt generation), but day-to-day iteration belongs in the UI.
+
+---
+
+### Team Development Workflow
+
+When multiple engineers or AI practitioners work on the same project, PromptTree lets everyone iterate independently and merge cleanly — the same way you'd manage source code.
+
+**How it works:**
+
+Each prompt version is a `.yaml` file in `.prompttree/registry/nodes/`. Because every node is a plain file with a stable UUID name, concurrent changes from different team members produce independent files with no merge conflicts. `labels.json` is the only shared file — and label changes are intentional, reviewable commits.
+
+**Typical day-to-day flow:**
+
+```
+1. Pull the latest main branch — you have the full prompt history locally.
+2. Run `prompttree ui` to explore the current DAG.
+3. Branch from any node in the UI, write your new version, save.
+4. A new YAML file appears in .prompttree/registry/nodes/.
+5. Commit it on a feature branch and open a PR.
+6. Reviewers see a clean diff: exactly one new node file, nothing else.
+7. After merge, promote the node to the target label in the UI and commit labels.json.
+```
+
+```bash
+# After iterating in the UI
+git add .prompttree/registry/
+git commit -m "prompt: Summariser v3 — tighten length constraint"
+git push origin alice/summariser-v3
+```
+
+Because node files are immutable once written and named by UUID, two team members working in parallel never touch the same file. The only coordination point is `labels.json` — which node is currently `prod` — and that decision is an explicit, auditable commit, not a silent database update.
+
+Rollback is `git revert`. History is `git log`. Blame is `git blame`. No external service required.
+
+---
+
+### DevOps / Production Workflow
+
+In production you want prompts to be stable, auditable, and secure. PromptTree integrates directly into CI/CD pipelines using labels for safe promotion and AES-256-GCM encryption to keep prompt content out of plaintext config.
+
+**Resolve by label — decouple prompt versions from application deploys:**
+
+Your application code never hardcodes a node ID. It resolves by label, so you can update the active prompt without redeploying the application.
+
+```python
+import prompttree as pt
+import os
+
+# Key injected from your secret manager (Vault, AWS SSM, GitHub Secrets, etc.)
+engine = pt.PromptTree(key=os.environ["PT_KEY"])
+
+# Always returns the node currently labelled "prod" for this family
+prompt = engine.get_prompt("Summariser", label="prod", vars={"text": document_text})
+```
+
+**Encrypt before deploy (CI step):**
+
+Commit plaintext prompts in your repo for readability and review. Lock them in CI so only ciphertext reaches production.
+
+```yaml
+# .github/workflows/deploy.yml (excerpt)
+- name: Lock prompt registry
+  run: prompttree lock --key ${{ secrets.PT_KEY }}
+
+- name: Deploy application
+  run: ./deploy.sh
+```
+
+```bash
+# Locally — decrypt to plaintext for development
+prompttree unlock --key $PT_KEY
+```
+
+The `content` field in each node YAML is encrypted in-place; `metadata`, `name`, and `parent_id` remain readable so git history and the DAG structure are preserved.
+
+**Safe rollback in production:**
+
+Because every node is immutable and labels are the only mutable pointer, rolling back is a one-line label change — made in the UI or in code:
+
+```python
+engine.set_label("Summariser", "prod", previous_node_id)
+```
+
+Commit the `labels.json` change and push — no data loss, no service restart required if your application resolves the label at request time.
+
+**Staging / canary environments:**
+
+Use multiple labels to manage environments independently:
+
+```json
+{
+  "Summariser": {
+    "prod":    "a1b2c3...",
+    "staging": "d4e5f6...",
+    "canary":  "g7h8i9..."
+  }
+}
+```
+
+```python
+label = os.environ.get("PROMPT_ENV", "prod")   # injected per deployment
+prompt = engine.get_prompt("Summariser", label=label, vars={...})
+```
+
+---
+
+### Self-hosted alternative to SaaS prompt management platforms
+
+Platforms like LangFuse and LangSmith offer prompt management, but they require sending prompt content and model metadata to an external cloud service. In regulated industries — finance, healthcare, government, defence — that is often a non-starter: data governance policies, air-gapped networks, or legal restrictions on data residency make SaaS tools unavailable regardless of their technical merit.
+
+PromptTree is a viable self-hosted alternative for these environments:
+
+| Capability | SaaS platforms | PromptTree |
+|---|---|---|
+| Prompt versioning | Cloud database | Git — your existing infrastructure |
+| Lineage / history | Web UI, vendor-hosted | Visual DAG + `git log`, self-hosted |
+| Environment promotion | Dashboard (cloud) | Labels in `labels.json`, committed to your repo |
+| Access control | Vendor IAM | Your Git host (GitHub Enterprise, GitLab, Bitbucket) |
+| Encryption at rest | Vendor-managed | AES-256-GCM, your key, your secrets manager |
+| Auditability | Vendor logs | Native git history — immutable, signable with GPG |
+| Network requirement | Outbound HTTPS to vendor | None — runs entirely offline |
+| Cost | Per-seat or usage-based SaaS fee | Zero — MIT licensed, no telemetry |
+
+**What PromptTree does not currently cover:** runtime tracing, LLM call logging, and evaluation dashboards are outside its v1.0 scope. For those capabilities in a restricted environment, a self-hosted LangFuse instance or an internal observability stack (OpenTelemetry + your existing APM) can sit alongside PromptTree — they operate on different layers (prompt storage vs. runtime observability) and do not overlap.
+
+**Practical enterprise setup:**
+
+```
+Git host (GitHub Enterprise / GitLab self-managed)
+  └── .prompttree/registry/         ← prompt source of truth, access-controlled like any repo
+       ├── nodes/                   ← immutable YAML per version, diff-able in PRs
+       └── labels.json              ← prod/staging/canary pointers, changed via PR + approval
+
+CI/CD pipeline
+  └── prompttree lock --key $PT_KEY ← encrypts content before artefact is built
+
+Production runtime
+  └── PromptTree(key=os.environ["PT_KEY"])
+      └── get_prompt(..., label="prod")  ← decrypts in-memory, no plaintext on disk
+```
+
+Secrets management (Vault, AWS SSM Parameter Store, Azure Key Vault) holds `PT_KEY`. The repo holds the encrypted ciphertext. Neither alone is sufficient to read a prompt — standard defence-in-depth for sensitive IP.
+
+---
+
 ## Install
 
 ```bash
